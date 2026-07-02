@@ -1,6 +1,5 @@
 from pydantic import BaseModel, Field
 
-
 class TrainingConfigCreate(BaseModel):
 
     dataset_id: int
@@ -20,3 +19,5 @@ class TrainingConfigCreate(BaseModel):
     lora_dropout: float = Field(default=0.05, ge=0, le=1)
 
     max_sequence_length: int = Field(default=2048, ge=128)
+
+

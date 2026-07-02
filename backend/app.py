@@ -4,7 +4,7 @@ from sqlalchemy.orm import declarative_base
 from database.connection import Base, engine
 from database.models import Dataset
 from routes.training import router as training_router
-from routes.models import router as models_router
+from routes.model import router as models_router
 
 app = FastAPI(title="Enterprise LLM Studio")
 

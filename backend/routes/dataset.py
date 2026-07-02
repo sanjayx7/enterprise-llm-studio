@@ -16,7 +16,7 @@ from database.models import Dataset
 router = APIRouter(prefix="/dataset", tags=["Dataset"])
 
 UPLOAD_FOLDER = "uploads"
-ALLOWED_EXTENSIONS = {".csv", ".json", ".jsonl"}
+ALLOWED_EXTENSIONS = {".csv", ".json", ".jsonl", ".parquet"}
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
@@ -35,7 +35,7 @@ async def upload_dataset(
                 status_code=400,
                 content={
                     "success": False,
-                    "message": "Only CSV, JSON and JSONL files are supported."
+                    "message": "Only CSV, JSON, JSONL, and Parquet files are supported."
                 }
             )
 
@@ -193,6 +193,20 @@ async def preview_dataset(
                 "data": preview
             }
 
+        # Parquet Preview
+        elif extension == ".parquet":
+
+            df = pd.read_parquet(filepath)
+
+            return {
+                "success": True,
+                "message": "Dataset preview fetched successfully.",
+                "data": {
+                    "columns": df.columns.tolist(),
+                    "rows": df.head(10).to_dict(orient="records")
+                }
+            }
+
         return JSONResponse(
             status_code=400,
             content={
@@ -341,6 +355,45 @@ async def validate_dataset(
             if total_rows == 0:
                 result["valid"] = False
                 result["issues"].append("Dataset is empty.")
+
+        # ---------------- Parquet ---------------- #
+
+        elif extension == ".parquet":
+
+            df = pd.read_parquet(filepath)
+
+            result["total_rows"] = len(df)
+
+            if df.empty:
+                result["valid"] = False
+                result["issues"].append("Dataset is empty.")
+
+            duplicate_rows = df.duplicated().sum()
+            result["duplicate_rows"] = int(duplicate_rows)
+
+            if duplicate_rows > 0:
+                result["issues"].append(
+                    f"{duplicate_rows} duplicate rows found."
+                )
+
+            empty_rows = df.isnull().all(axis=1).sum()
+            result["empty_rows"] = int(empty_rows)
+
+            if empty_rows > 0:
+                result["issues"].append(
+                    f"{empty_rows} empty rows found."
+                )
+
+            missing_columns = [
+                col for col in df.columns
+                if str(col).strip() == ""
+            ]
+
+            if missing_columns:
+                result["valid"] = False
+                result["issues"].append(
+                    "Dataset contains unnamed columns."
+                )
 
         else:
 
