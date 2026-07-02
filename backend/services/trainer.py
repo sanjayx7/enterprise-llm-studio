@@ -1,37 +1,17 @@
-from transformers import AutoModelForCausalLM, AutoTokenizer
-import pandas as pd
+from services.model_loader import load_model
+from services.dataset_loader import load_dataset
+from services.dataset_formatter import format_dataset
 
 
-def load_model(model_id: str):
+def prepare_training(model_id: str, dataset_path: str):
     """
-    Load Hugging Face model and tokenizer.
+    Prepare model and dataset for training.
     """
 
-    tokenizer = AutoTokenizer.from_pretrained(model_id)
+    model, tokenizer = load_model(model_id)
 
-    model = AutoModelForCausalLM.from_pretrained(
-        model_id
-    )
+    dataframe = load_dataset(dataset_path)
 
-    return model, tokenizer
+    train_dataset = format_dataset(dataframe)
 
-
-
-def load_dataset(filepath: str):
-
-    extension = filepath.split(".")[-1].lower()
-
-    if extension == "csv":
-        return pd.read_csv(filepath)
-
-    elif extension == "json":
-        return pd.read_json(filepath)
-
-    elif extension == "jsonl":
-        return pd.read_json(filepath, lines=True)
-
-    elif extension == "parquet":
-        return pd.read_parquet(filepath)
-
-    raise Exception("Unsupported dataset")
-    
+    return model, tokenizer, train_dataset

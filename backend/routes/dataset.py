@@ -49,6 +49,39 @@ async def upload_dataset(
         with open(filepath, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
+        try:
+            if extension == ".csv":
+                df = pd.read_csv(filepath)
+            elif extension == ".json":
+                df = pd.read_json(filepath)
+            elif extension == ".jsonl":
+                df = pd.read_json(filepath, lines=True)
+            elif extension == ".parquet":
+                df = pd.read_parquet(filepath)
+            else:
+                raise Exception("Unsupported format")
+
+            required_columns = {"instruction", "input", "output"}
+            if not required_columns.issubset(df.columns):
+                os.remove(filepath)
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "success": False,
+                        "message": "Unsupported dataset format. Please upload an instruction tuning dataset."
+                    }
+                )
+        except Exception as read_err:
+            if os.path.exists(filepath):
+                os.remove(filepath)
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "success": False,
+                    "message": "Unsupported dataset format. Please upload an instruction tuning dataset."
+                }
+            )
+
         dataset = Dataset(
             original_filename=file.filename,
             stored_filename=unique_name,
@@ -282,6 +315,13 @@ async def validate_dataset(
                 result["valid"] = False
                 result["issues"].append("Dataset is empty.")
 
+            required_columns = {"instruction", "input", "output"}
+            if not required_columns.issubset(df.columns):
+                result["valid"] = False
+                result["issues"].append(
+                    "Unsupported dataset format. Please upload an instruction tuning dataset."
+                )
+
             duplicate_rows = df.duplicated().sum()
             result["duplicate_rows"] = int(duplicate_rows)
 
@@ -323,9 +363,27 @@ async def validate_dataset(
                 if len(data) == 0:
                     result["valid"] = False
                     result["issues"].append("Dataset is empty.")
+                else:
+                    first_item = data[0]
+                    if isinstance(first_item, dict):
+                        required_columns = {"instruction", "input", "output"}
+                        if not required_columns.issubset(first_item.keys()):
+                            result["valid"] = False
+                            result["issues"].append(
+                                "Unsupported dataset format. Please upload an instruction tuning dataset."
+                            )
+                    else:
+                        result["valid"] = False
+                        result["issues"].append(
+                            "Unsupported dataset format. Please upload an instruction tuning dataset."
+                        )
 
             else:
                 result["total_rows"] = 1
+                result["valid"] = False
+                result["issues"].append(
+                    "Unsupported dataset format. Please upload an instruction tuning dataset."
+                )
 
         # ---------------- JSONL ---------------- #
 
@@ -341,8 +399,15 @@ async def validate_dataset(
                         continue
 
                     try:
-                        json.loads(line)
+                        obj = json.loads(line)
                         total_rows += 1
+                        if total_rows == 1:
+                            required_columns = {"instruction", "input", "output"}
+                            if not isinstance(obj, dict) or not required_columns.issubset(obj.keys()):
+                                result["valid"] = False
+                                result["issues"].append(
+                                    "Unsupported dataset format. Please upload an instruction tuning dataset."
+                                )
 
                     except json.JSONDecodeError:
                         result["valid"] = False
@@ -367,6 +432,13 @@ async def validate_dataset(
             if df.empty:
                 result["valid"] = False
                 result["issues"].append("Dataset is empty.")
+
+            required_columns = {"instruction", "input", "output"}
+            if not required_columns.issubset(df.columns):
+                result["valid"] = False
+                result["issues"].append(
+                    "Unsupported dataset format. Please upload an instruction tuning dataset."
+                )
 
             duplicate_rows = df.duplicated().sum()
             result["duplicate_rows"] = int(duplicate_rows)

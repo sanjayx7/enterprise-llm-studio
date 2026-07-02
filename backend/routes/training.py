@@ -7,7 +7,7 @@ from database.models import Dataset, TrainingConfig
 from schemas.training import TrainingConfigCreate
 from config.models import AVAILABLE_MODELS
 from database.models import TrainingJob, TrainingConfig
-from services.trainer import load_model, load_dataset
+from services.trainer import prepare_training
 
 
 
@@ -103,35 +103,11 @@ async def start_training(
 
         config = (
             db.query(TrainingConfig)
-            .filter(
-                TrainingConfig.id == config_id
-            )
+            .filter(TrainingConfig.id == config_id)
             .first()
         )
-
-        model, tokenizer = load_model(config.model_id)
-
-        dataset = (
-            db.query(Dataset)
-            .filter(Dataset.id == config.dataset_id)
-            .first()
-        )
-
-        df = load_dataset(dataset.filepath)
-
-        
-
-        return {
-            "success": True,
-            "message": "Model and dataset loaded successfully.",
-            "data": {
-                "model": config.model_id,
-                "rows": len(df)
-            }
-        }
 
         if not config:
-
             return JSONResponse(
                 status_code=404,
                 content={
@@ -140,42 +116,44 @@ async def start_training(
                 }
             )
 
-        job = TrainingJob(
-
-            config_id=config.id,
-
-            status="PENDING"
+        dataset_record = (
+            db.query(Dataset)
+            .filter(Dataset.id == config.dataset_id)
+            .first()
         )
 
-        db.add(job)
+        if not dataset_record:
+            return JSONResponse(
+                status_code=404,
+                content={
+                    "success": False,
+                    "message": "Dataset not found."
+                }
+            )
 
-        db.commit()
-
-        db.refresh(job)
+        model, tokenizer, train_dataset = prepare_training(
+            config.model_id,
+            dataset_record.filepath
+        )
 
         return {
-
             "success": True,
-
-            "message": "Training job created successfully.",
-
+            "message": "Training pipeline prepared successfully.",
             "data": {
-
-                "job_id": job.id,
-
-                "status": job.status
+                "model": config.model_id,
+                "rows": train_dataset.num_rows,
+                "vocab_size": tokenizer.vocab_size,
+                "preview": train_dataset[0]
             }
         }
 
     except Exception as e:
 
-        db.rollback()
-
         return JSONResponse(
             status_code=500,
             content={
                 "success": False,
-                "message": "Failed to create training job.",
+                "message": "Training failed.",
                 "error": str(e)
             }
         )
