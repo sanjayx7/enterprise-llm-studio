@@ -10,7 +10,6 @@ from database.models import TrainingJob, TrainingConfig
 from services.trainer import prepare_training
 
 
-
 router = APIRouter(
     prefix="/training",
     tags=["Training"]
@@ -133,17 +132,21 @@ async def start_training(
 
         model, tokenizer, train_dataset = prepare_training(
             config.model_id,
-            dataset_record.filepath
+            dataset_record.filepath,
+            config.max_sequence_length,
+            config.lora_rank,
+            config.lora_alpha,
+            config.lora_dropout
         )
+
+        model.print_trainable_parameters()
 
         return {
             "success": True,
-            "message": "Training pipeline prepared successfully.",
+            "message": "LoRA prepared successfully.",
             "data": {
                 "model": config.model_id,
-                "rows": train_dataset.num_rows,
-                "vocab_size": tokenizer.vocab_size,
-                "preview": train_dataset[0]
+                "samples": train_dataset.num_rows
             }
         }
 
