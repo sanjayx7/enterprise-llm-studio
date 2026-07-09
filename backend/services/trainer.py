@@ -33,4 +33,8 @@ def prepare_training(
         dropout
     )
 
-    return model, tokenizer, tokenized_dataset
+    return (
+        model,
+        tokenizer,
+        tokenized_dataset
+    )

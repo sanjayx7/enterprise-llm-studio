@@ -11,3 +11,8 @@ env/
 
 # Uploaded Datasets
 backend/uploads/
+
+# Trained Models
+backend/trained_models/
+db.sqlite3
+

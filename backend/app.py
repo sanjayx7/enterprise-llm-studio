@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from routes.dataset import router as dataset_router
 from sqlalchemy.orm import declarative_base
 from database.connection import Base, engine
@@ -8,6 +9,13 @@ from routes.model import router as models_router
 
 app = FastAPI(title="Enterprise LLM Studio")
 
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 Base.metadata.create_all(bind=engine)
 
