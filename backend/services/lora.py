@@ -1,4 +1,4 @@
-from peft import LoraConfig, get_peft_model
+from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 
 
 def prepare_lora(
@@ -10,6 +10,12 @@ def prepare_lora(
     """
     Configure and apply LoRA to the model.
     """
+
+    # If the model is quantized, prepare it for training
+    if getattr(model, "is_loaded_in_4bit", False) or getattr(model, "is_loaded_in_8bit", False):
+        model = prepare_model_for_kbit_training(model)
+
+    model.config.use_cache = False
 
     lora_config = LoraConfig(
         r=rank,

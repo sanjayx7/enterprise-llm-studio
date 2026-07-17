@@ -107,6 +107,8 @@ def create_trainer(
     job_id=None
 ):
     has_gpu = torch.cuda.is_available()
+    use_bf16 = has_gpu and torch.cuda.is_bf16_supported()
+    use_fp16 = has_gpu and not use_bf16
 
     if not has_gpu:
         # Limit CPU threads to avoid consuming 100% of all cores and freezing the host system.
@@ -129,11 +131,13 @@ def create_trainer(
         save_strategy="no",
         report_to="none",
         remove_unused_columns=False,
-        fp16=False,
-        bf16=False,
+        fp16=use_fp16,
+        bf16=use_bf16,
         dataloader_pin_memory=has_gpu,
         use_cpu=not has_gpu,
-        disable_tqdm=True
+        disable_tqdm=True,
+        gradient_checkpointing=has_gpu,
+        optim="paged_adamw_32bit" if has_gpu else "adamw_torch"
     )
 
     trainer = SFTTrainer(
