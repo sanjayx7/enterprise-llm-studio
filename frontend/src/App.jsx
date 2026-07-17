@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
-import { LayoutDashboard, Database, Sliders, Activity, Cpu, Menu } from 'lucide-react';
+import { LayoutDashboard, Database, Sliders, Activity, Cpu, Menu, MessageSquare, Package } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import DatasetManager from './components/DatasetManager';
 import Trainer from './components/Trainer';
 import StatusMonitor from './components/StatusMonitor';
+import ModelHub from './components/ModelHub';
+import ChatArena from './components/ChatArena';
 
 import './App.css';
 
@@ -27,6 +29,10 @@ export default function App() {
         return <Trainer setActiveTab={handleTabClick} setSelectedJobId={setSelectedJobId} />;
       case 'jobs':
         return <StatusMonitor selectedJobId={selectedJobId} setSelectedJobId={setSelectedJobId} />;
+      case 'models':
+        return <ModelHub setActiveTab={handleTabClick} />;
+      case 'chat':
+        return <ChatArena />;
       default:
         return <Dashboard setActiveTab={handleTabClick} />;
     }
@@ -81,6 +87,18 @@ export default function App() {
             <button onClick={() => handleTabClick('jobs')}>
               <Activity size={18} />
               <span>Job Monitor</span>
+            </button>
+          </li>
+          <li className={`sidebar-item ${activeTab === 'models' ? 'active' : ''}`}>
+            <button onClick={() => handleTabClick('models')}>
+              <Package size={18} />
+              <span>Model Hub</span>
+            </button>
+          </li>
+          <li className={`sidebar-item ${activeTab === 'chat' ? 'active' : ''}`}>
+            <button onClick={() => handleTabClick('chat')}>
+              <MessageSquare size={18} />
+              <span>Chat Arena</span>
             </button>
           </li>
         </ul>

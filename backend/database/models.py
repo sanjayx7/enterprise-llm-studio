@@ -93,6 +93,11 @@ class TrainingJob(Base):
         nullable=True
     )
 
+    custom_name = Column(
+        String(255),
+        nullable=True
+    )
+
     logs = Column(
         Text,
         nullable=True
@@ -107,3 +112,29 @@ class TrainingJob(Base):
         DateTime(timezone=True),
         nullable=True
     )
+
+
+class ChatSession(Base):
+    __tablename__ = "chat_sessions"
+
+    id = Column(String(50), primary_key=True, index=True)
+    title = Column(String(255), nullable=False)
+    model_id = Column(String(255), nullable=False)
+    adapter_path = Column(String(500), nullable=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
+
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(String(50), nullable=False, index=True)
+    role = Column(String(20), nullable=False)  # 'user' or 'assistant'
+    content = Column(Text, nullable=False)
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )

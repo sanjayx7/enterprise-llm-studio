@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { UploadCloud, Eye, CheckCircle2, AlertTriangle, FileSpreadsheet, X, RefreshCw } from 'lucide-react';
+import { UploadCloud, Eye, CheckCircle2, AlertTriangle, FileSpreadsheet, X, RefreshCw, Trash2, Download, BarChart2, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const API_BASE = 'http://localhost:8000';
 
@@ -13,9 +13,16 @@ export default function DatasetManager() {
   // Modal States
   const [previewData, setPreviewData] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [activePreviewId, setActivePreviewId] = useState(null);
+  const [previewPage, setPreviewPage] = useState(1);
+  const [previewSearch, setPreviewSearch] = useState('');
+  const [previewTotalRows, setPreviewTotalRows] = useState(0);
   
   const [validationData, setValidationData] = useState(null);
   const [validationLoading, setValidationLoading] = useState(false);
+
+  const [statsData, setStatsData] = useState(null);
+  const [statsLoading, setStatsLoading] = useState(false);
 
   const fetchDatasets = async () => {
     setLoading(true);
@@ -91,25 +98,72 @@ export default function DatasetManager() {
   };
 
   // Preview dataset
-  const openPreview = async (id, filename) => {
+  const openPreview = async (id, filename, page = 1, search = '') => {
     setPreviewLoading(true);
-    setPreviewData({ filename, rows: [] });
+    setActivePreviewId(id);
+    setPreviewPage(page);
+    setPreviewSearch(search);
+    setPreviewData({ filename, rows: [], columns: [] });
     try {
-      const res = await fetch(`${API_BASE}/dataset/preview/${id}`);
+      const searchParam = search ? `&search=${encodeURIComponent(search)}` : '';
+      const res = await fetch(`${API_BASE}/dataset/preview/${id}?page=${page}&limit=10${searchParam}`);
       const data = await res.json();
       if (data.success) {
         setPreviewData({
           filename,
-          // CSV / Parquet format wraps records under data.rows, JSON/JSONL might just return raw list
-          rows: data.data.rows || (Array.isArray(data.data) ? data.data : [data.data]),
-          columns: data.data.columns || (Array.isArray(data.data) && data.data[0] ? Object.keys(data.data[0]) : [])
+          rows: data.data.rows || [],
+          columns: data.data.columns || []
         });
+        setPreviewTotalRows(data.data.total_rows);
       }
     } catch (err) {
       console.error(err);
       setPreviewData(null);
     } finally {
       setPreviewLoading(false);
+    }
+  };
+
+  // Delete dataset
+  const handleDelete = async (id, filename) => {
+    if (!window.confirm(`Are you sure you want to delete dataset "${filename}"?`)) return;
+    try {
+      const res = await fetch(`${API_BASE}/dataset/delete/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        fetchDatasets();
+      } else {
+        alert(data.message || 'Failed to delete dataset.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error connecting to backend.');
+    }
+  };
+
+  // Download dataset
+  const handleDownload = (id) => {
+    window.open(`${API_BASE}/dataset/download/${id}`, '_blank');
+  };
+
+  // View statistics
+  const openStats = async (id, filename) => {
+    setStatsLoading(true);
+    setStatsData({ filename, stats: null });
+    try {
+      const res = await fetch(`${API_BASE}/dataset/stats/${id}`);
+      const data = await res.json();
+      if (data.success) {
+        setStatsData({
+          filename,
+          stats: data.data
+        });
+      }
+    } catch (err) {
+      console.error(err);
+      setStatsData(null);
+    } finally {
+      setStatsLoading(false);
     }
   };
 
@@ -241,12 +295,21 @@ export default function DatasetManager() {
                       <td>{dataset.size_kb}</td>
                       <td>{new Date(dataset.uploaded_at).toLocaleString()}</td>
                       <td style={{ textAlign: 'right' }}>
-                        <div style={{ display: 'inline-flex', gap: '0.5rem' }}>
-                          <button className="btn btn-secondary" style={{ padding: '0.4rem 0.75rem' }} onClick={() => openPreview(dataset.id, dataset.filename)}>
+                        <div style={{ display: 'inline-flex', gap: '0.25rem' }}>
+                          <button className="btn btn-secondary" style={{ padding: '0.4rem 0.5rem' }} onClick={() => openPreview(dataset.id, dataset.filename, 1, '')} title="Preview dataset rows">
                             <Eye size={14} /> Preview
                           </button>
-                          <button className="btn btn-primary" style={{ padding: '0.4rem 0.75rem' }} onClick={() => openValidation(dataset.id, dataset.filename)}>
+                          <button className="btn btn-primary" style={{ padding: '0.4rem 0.5rem' }} onClick={() => openValidation(dataset.id, dataset.filename)} title="Validate dataset format">
                             <CheckCircle2 size={14} /> Validate
+                          </button>
+                          <button className="btn btn-secondary" style={{ padding: '0.4rem 0.5rem' }} onClick={() => openStats(dataset.id, dataset.filename)} title="View dataset statistics">
+                            <BarChart2 size={14} /> Stats
+                          </button>
+                          <button className="btn btn-secondary" style={{ padding: '0.4rem 0.5rem' }} onClick={() => handleDownload(dataset.id)} title="Download dataset file">
+                            <Download size={14} />
+                          </button>
+                          <button className="btn btn-secondary" style={{ padding: '0.4rem 0.5rem', color: 'var(--error)', borderColor: 'var(--error-light)' }} onClick={() => handleDelete(dataset.id, dataset.filename)} title="Delete dataset">
+                            <Trash2 size={14} />
                           </button>
                         </div>
                       </td>
@@ -262,24 +325,58 @@ export default function DatasetManager() {
       {/* Preview Modal */}
       {previewData && (
         <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '900px' }}>
+          <div className="modal-content" style={{ maxWidth: '950px', width: '90%' }}>
             <div className="modal-header">
               <h3>Previewing: {previewData.filename}</h3>
-              <button className="close-btn" onClick={() => setPreviewData(null)}>
+              <button className="close-btn" onClick={() => { setPreviewData(null); setActivePreviewId(null); }}>
                 <X size={18} />
               </button>
             </div>
             <div className="modal-body">
+              {/* Search Bar */}
+              <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem' }}>
+                <div style={{ position: 'relative', flexGrow: 1 }}>
+                  <Search size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-light)' }} />
+                  <input 
+                    type="text" 
+                    placeholder="Search in instructions, inputs, or outputs..." 
+                    defaultValue={previewSearch}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        openPreview(activePreviewId, previewData.filename, 1, e.target.value);
+                      }
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '0.5rem 1rem 0.5rem 2.25rem',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1px solid var(--border)',
+                      fontFamily: 'var(--font-sans)',
+                      fontSize: '0.9rem'
+                    }}
+                  />
+                </div>
+                <button 
+                  className="btn btn-primary" 
+                  onClick={(e) => {
+                    const val = e.currentTarget.previousSibling.firstChild.nextSibling.value;
+                    openPreview(activePreviewId, previewData.filename, 1, val);
+                  }}
+                >
+                  Search
+                </button>
+              </div>
+
               {previewLoading ? (
                 <div style={{ textAlign: 'center', padding: '4rem', color: 'var(--text-muted)' }}>
                   Loading preview records...
                 </div>
               ) : previewData.rows.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '4rem', color: 'var(--text-muted)' }}>
-                  No preview rows available.
+                  No preview rows found matching your search.
                 </div>
               ) : (
-                <div className="table-container" style={{ maxHeight: '55vh', overflowY: 'auto' }}>
+                <div className="table-container" style={{ maxHeight: '50vh', overflowY: 'auto' }}>
                   <table className="table" style={{ fontSize: '0.8rem' }}>
                     <thead>
                       <tr>
@@ -317,8 +414,119 @@ export default function DatasetManager() {
                 </div>
               )}
             </div>
+            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                {previewTotalRows > 0 ? (
+                  <>
+                    Showing {Math.min((previewPage - 1) * 10 + 1, previewTotalRows)} to {Math.min(previewPage * 10, previewTotalRows)} of {previewTotalRows} records
+                  </>
+                ) : (
+                  'No records found'
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button 
+                  className="btn btn-secondary" 
+                  disabled={previewPage === 1 || previewLoading} 
+                  onClick={() => openPreview(activePreviewId, previewData.filename, previewPage - 1, previewSearch)}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', padding: '0.4rem 0.75rem' }}
+                >
+                  <ChevronLeft size={16} /> Prev
+                </button>
+                <button 
+                  className="btn btn-secondary" 
+                  disabled={previewPage * 10 >= previewTotalRows || previewLoading} 
+                  onClick={() => openPreview(activePreviewId, previewData.filename, previewPage + 1, previewSearch)}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', padding: '0.4rem 0.75rem' }}
+                >
+                  Next <ChevronRight size={16} />
+                </button>
+                <button className="btn btn-secondary" style={{ padding: '0.4rem 1rem' }} onClick={() => { setPreviewData(null); setActivePreviewId(null); }}>
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Stats Modal */}
+      {statsData && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '550px' }}>
+            <div className="modal-header">
+              <h3>Statistics: {statsData.filename}</h3>
+              <button className="close-btn" onClick={() => setStatsData(null)}>
+                <X size={18} />
+              </button>
+            </div>
+            <div className="modal-body">
+              {statsLoading ? (
+                <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+                  Calculating advanced statistics...
+                </div>
+              ) : !statsData.stats ? (
+                <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--error)' }}>
+                  Failed to load dataset statistics.
+                </div>
+              ) : (
+                <div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+                    <div className="card" style={{ padding: '1rem', backgroundColor: 'var(--bg-app)', border: 'none', textAlign: 'center' }}>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Rows</div>
+                      <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--primary)', marginTop: '0.25rem' }}>{statsData.stats.total_rows}</div>
+                    </div>
+                    <div className="card" style={{ padding: '1rem', backgroundColor: 'var(--bg-app)', border: 'none', textAlign: 'center' }}>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Est. Avg Tokens</div>
+                      <div style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--success)', marginTop: '0.25rem' }}>{statsData.stats.avg_tokens_per_row}</div>
+                    </div>
+                  </div>
+
+                  <div className="card" style={{ padding: '1.25rem', marginBottom: '1.5rem' }}>
+                    <div style={{ fontWeight: 600, fontSize: '0.9rem', marginBottom: '0.75rem' }}>Data Quality Check</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                        <span style={{ color: 'var(--text-muted)' }}>Duplicate Samples:</span>
+                        <span style={{ fontWeight: 600, color: statsData.stats.duplicates > 0 ? 'var(--warning)' : 'var(--success)' }}>
+                          {statsData.stats.duplicates} ({statsData.stats.total_rows > 0 ? ((statsData.stats.duplicates / statsData.stats.total_rows) * 100).toFixed(1) : 0}%)
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                        <span style={{ color: 'var(--text-muted)' }}>Completely Empty Rows:</span>
+                        <span style={{ fontWeight: 600, color: statsData.stats.empty_rows > 0 ? 'var(--error)' : 'var(--success)' }}>
+                          {statsData.stats.empty_rows}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                        <span style={{ color: 'var(--text-muted)' }}>File Size:</span>
+                        <span style={{ fontWeight: 600 }}>{statsData.stats.file_size_kb} KB</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="card" style={{ padding: '1.25rem' }}>
+                    <div style={{ fontWeight: 600, fontSize: '0.9rem', marginBottom: '0.75rem' }}>Column Length Distribution (Characters)</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                      {Object.keys(statsData.stats.column_stats).map((col) => {
+                        const colStat = statsData.stats.column_stats[col];
+                        return (
+                          <div key={col}>
+                            <div style={{ fontSize: '0.8rem', fontWeight: 600, textTransform: 'capitalize', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>{col} Column</div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
+                              <span>Min: <strong style={{ color: 'var(--text-main)' }}>{colStat.min_chars}</strong></span>
+                              <span>Avg: <strong style={{ color: 'var(--text-main)' }}>{colStat.avg_chars}</strong></span>
+                              <span>Max: <strong style={{ color: 'var(--text-main)' }}>{colStat.max_chars}</strong></span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
             <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setPreviewData(null)}>
+              <button className="btn btn-secondary" onClick={() => setStatsData(null)}>
                 Close
               </button>
             </div>
